@@ -41,3 +41,13 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+/001
+/isikud
+/isikud_batches
+/isikud_faces
+/isikud_sorted
+/kasparilt
+/lisa
+/*.zip
+/face_detection/*.pyc
+/meri

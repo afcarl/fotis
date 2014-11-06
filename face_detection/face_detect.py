@@ -1,0 +1,138 @@
+# -*- coding: utf8 -*-
+import os, sys, errno, math
+from os.path import join
+from time import strftime, gmtime, time
+import numpy as np
+import cv2
+import utils
+
+# ###################################
+# 			START CONSTANTS
+# ###################################
+DEBUG_MODE = False
+
+FACE_CASCADE_CLASSIFIERS = {
+	"alt": "haarcascade_frontalface_alt.xml",				# 0
+	"alt2": "haarcascade_frontalface_alt2.xml",				# 1
+	"alt_tree": "haarcascade_frontalface_alt_tree.xml",		# 2
+	"default": "haarcascade_frontalface_default.xml", 		# 3
+	"profileface": "haarcascade_profileface.xml"			# 4
+}
+FACE_CASCADE_CLASSIFIER = join('cascades', FACE_CASCADE_CLASSIFIERS["default"])
+# the number used to multiply the box surrounding the face
+FACE_RECTANGLE_MULTIPLIER = 1.4
+# the size the face images are resized into
+DEFAULT_FACE_SIZE = 32
+
+MIN_NEIGHBORS = 5
+MIN_SIZE = (28, 28)
+# Flags:
+# CV_HAAR_DO_CANNY_PRUNING
+# CV_HAAR_SCALE_IMAGE  # fastest
+# CV_HAAR_FIND_BIGGEST_OBJECT
+# CV_HAAR_DO_ROUGH_SEARCH
+FLAG = cv2.cv.CV_HAAR_SCALE_IMAGE
+# #################################
+# 			END CONSTANTS
+# #################################
+
+def debugger(text, newline=True):
+	if DEBUG_MODE:
+		if newline:
+			print text
+		else:
+			print text,
+
+
+def load_faces(path_to_folder):
+	"""
+	Loads all images in a folder to dictionary object. Structure:
+	{filename1: [image, grayscaled_image],
+	filename2: [image, grayscaled_image],
+	...}
+	"""
+	img_dict = {}
+	for filename in os.listdir(path_to_folder):
+		img = cv2.imread(join(path_to_folder, filename))
+		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+		img_dict[filename] = [img, gray]
+	return img_dict
+
+def enlarge_rectangle(rectangle, factor=1.4):
+	new_w = int((rectangle[2] * factor) + 0.5)
+	new_h = int((rectangle[3] * factor) + 0.5)
+	new_x = rectangle[0] - (new_w / 4)
+	if new_x < 0:
+		new_x = 0
+	new_y = rectangle[1] - (new_h / 4)
+	if new_y < 0:
+		new_y = 0
+	return new_x, new_y, new_w, new_h
+
+def process_and_write_exhausting(path_to_folder, path_to_results, face_size=32):
+	"""
+	ToDo:
+		- enlarge the face area retangle by a factor of 2.2 to capture more of the face
+	"""
+	face_cascader = cv2.CascadeClassifier(FACE_CASCADE_CLASSIFIER)
+	debugger("Loading images...", False)
+	img_dict = load_faces(path_to_folder)
+	debugger("Complete. Loaded %d images\n" % len(img_dict))
+
+	# results_root_path = join(path_to_results, strftime("%d-%m-%Y %H-%M-%S", gmtime()))
+	utils.mkdir(path_to_results)
+	# for sf in (1.45, 1.4, 1.35, 1.3, 1.25, 1.2, 1.15, 1.1, 1.02):
+	for sf in (1.45, 1.4, 1.35, 1.3, 1.25, 1.2):
+		img_list = img_dict.keys()
+		debugger("Scalefactor: %.2f" % sf)
+		nr_detected=0
+		nr_not_detected=0
+		t1 = time()
+		for i in range(len(img_list)): 
+			el = img_list[i]
+			faces = face_cascader.detectMultiScale(
+					img_dict[el][1],
+					scaleFactor=sf,
+					minNeighbors=MIN_NEIGHBORS,
+					minSize=MIN_SIZE,
+					flags=FLAG
+					)
+			face_number = 0
+			found_faces = (not type(faces)==tuple) and faces.any()
+			if found_faces:
+				# the largest face is the last face, so we start numbering from the number of 
+				# faces since we start iterating from the first face which is the smallest
+				face_number = faces.size / 4
+			for (x,y,w,h) in faces:
+				face_number -= 1
+				nx, ny, nw, nh = enlarge_rectangle((x,y,w,h), FACE_RECTANGLE_MULTIPLIER)
+				face = img_dict[el][0][ny:ny+nh, nx:nx+nw]
+				if not (face.shape[0] == face.shape[1]):
+					face = img_dict[el][0][y:y+h, x:x+w]
+				# face = cv2.resize(face, (face_size, face_size))
+				file_name, file_ext = os.path.splitext(el)
+				face_filename = file_name + "_face%d" % face_number + file_ext
+				cv2.imwrite(join(path_to_results, face_filename), face)
+			if found_faces:
+				del img_dict[el]
+				nr_detected += 1
+			else:
+				nr_not_detected += 1
+		t2 = time()
+		debugger("\timages with faces: %d" % nr_detected)
+		debugger("\timages w/ou faces: %d" % nr_not_detected)
+		debugger("\ttime taken: %.2fs" % (t2-t1))
+
+"""
+face_detect.py <piltide kataloog> <nägude kataloog> <näofaili suurus pikslites (ruudukujuline)>
+Nt face_detect.py /storage/fotis/pildid /storage/fotis/naod 32
+"""
+if (len(sys.argv) > 2):
+    path_to_source = sys.argv[1]
+    path_to_results = sys.argv[2]
+    face_size = DEFAULT_FACE_SIZE
+    if len(sys.argv) > 3:
+    	face_size = int(sys.argv[3])
+    process_and_write_exhausting(path_to_source, path_to_results, face_size)
+else:
+    raise KeyError('Not enough arguments')
