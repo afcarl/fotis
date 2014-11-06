@@ -9,7 +9,7 @@ import utils
 # ###################################
 # 			START CONSTANTS
 # ###################################
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 FACE_CASCADE_CLASSIFIERS = {
 	"alt": "haarcascade_frontalface_alt.xml",				# 0
@@ -22,10 +22,10 @@ FACE_CASCADE_CLASSIFIER = join('cascades', FACE_CASCADE_CLASSIFIERS["default"])
 # the number used to multiply the box surrounding the face
 FACE_RECTANGLE_MULTIPLIER = 1.4
 # the size the face images are resized into
-DEFAULT_FACE_SIZE = 32
+DEFAULT_MIN_FACE_SIZE = 28
 
+SCALE_FACTOR = 1.05
 MIN_NEIGHBORS = 5
-MIN_SIZE = (28, 28)
 # Flags:
 # CV_HAAR_DO_CANNY_PRUNING
 # CV_HAAR_SCALE_IMAGE  # fastest
@@ -43,96 +43,78 @@ def debugger(text, newline=True):
 		else:
 			print text,
 
-
-def load_faces(path_to_folder):
-	"""
-	Loads all images in a folder to dictionary object. Structure:
-	{filename1: [image, grayscaled_image],
-	filename2: [image, grayscaled_image],
-	...}
-	"""
-	img_dict = {}
-	for filename in os.listdir(path_to_folder):
-		img = cv2.imread(join(path_to_folder, filename))
-		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-		img_dict[filename] = [img, gray]
-	return img_dict
-
-def enlarge_rectangle(rectangle, factor=1.4):
-	new_w = int((rectangle[2] * factor) + 0.5)
-	new_h = int((rectangle[3] * factor) + 0.5)
-	new_x = rectangle[0] - (new_w / 4)
+def enlarge_rectangle(x, y, w, h, factor = FACE_RECTANGLE_MULTIPLIER):
+	new_w = int((w * factor) + 0.5)
+	new_h = int((h * factor) + 0.5)
+	center_x = int(x + w / 2)
+	center_y = int(y + h / 2)
+	new_x = center_x - (new_w / 2)
 	if new_x < 0:
 		new_x = 0
-	new_y = rectangle[1] - (new_h / 4)
+	new_y = center_y - (new_h / 2)
 	if new_y < 0:
 		new_y = 0
 	return new_x, new_y, new_w, new_h
 
-def process_and_write_exhausting(path_to_folder, path_to_results, face_size=32):
-	"""
-	ToDo:
-		- enlarge the face area retangle by a factor of 2.2 to capture more of the face
-	"""
+def process_and_write_exhausting(path_to_folder, path_to_results, min_face_size=32):
 	face_cascader = cv2.CascadeClassifier(FACE_CASCADE_CLASSIFIER)
-	debugger("Loading images...", False)
-	img_dict = load_faces(path_to_folder)
-	debugger("Complete. Loaded %d images\n" % len(img_dict))
 
 	# results_root_path = join(path_to_results, strftime("%d-%m-%Y %H-%M-%S", gmtime()))
 	utils.mkdir(path_to_results)
-	# for sf in (1.45, 1.4, 1.35, 1.3, 1.25, 1.2, 1.15, 1.1, 1.02):
-	for sf in (1.45, 1.4, 1.35, 1.3, 1.25, 1.2):
-		img_list = img_dict.keys()
-		debugger("Scalefactor: %.2f" % sf)
-		nr_detected=0
-		nr_not_detected=0
-		t1 = time()
-		for i in range(len(img_list)): 
-			el = img_list[i]
+
+	nr_detected=0
+	nr_not_detected=0
+	t1 = time()
+	for filename in os.listdir(path_to_folder):
+		img = cv2.imread(join(path_to_folder, filename))
+		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+		for sf in (1.45, 1.4, 1.35, 1.3, 1.25, 1.2):
 			faces = face_cascader.detectMultiScale(
-					img_dict[el][1],
+					gray,
 					scaleFactor=sf,
 					minNeighbors=MIN_NEIGHBORS,
-					minSize=MIN_SIZE,
+					minSize=(min_face_size, min_face_size),
 					flags=FLAG
 					)
-			face_number = 0
 			found_faces = (not type(faces)==tuple) and faces.any()
 			if found_faces:
-				# the largest face is the last face, so we start numbering from the number of 
+				# the largest face is the last face, so we start numbering from the number of
 				# faces since we start iterating from the first face which is the smallest
 				face_number = faces.size / 4
-			for (x,y,w,h) in faces:
-				face_number -= 1
-				nx, ny, nw, nh = enlarge_rectangle((x,y,w,h), FACE_RECTANGLE_MULTIPLIER)
-				face = img_dict[el][0][ny:ny+nh, nx:nx+nw]
-				if not (face.shape[0] == face.shape[1]):
-					face = img_dict[el][0][y:y+h, x:x+w]
-				# face = cv2.resize(face, (face_size, face_size))
-				file_name, file_ext = os.path.splitext(el)
-				face_filename = file_name + "_face%d" % face_number + file_ext
-				cv2.imwrite(join(path_to_results, face_filename), face)
-			if found_faces:
-				del img_dict[el]
-				nr_detected += 1
-			else:
-				nr_not_detected += 1
-		t2 = time()
-		debugger("\timages with faces: %d" % nr_detected)
-		debugger("\timages w/ou faces: %d" % nr_not_detected)
-		debugger("\ttime taken: %.2fs" % (t2-t1))
+				break
+
+		for (x,y,w,h) in faces:
+			face_number -= 1
+			nx, ny, nw, nh = enlarge_rectangle(x, y, w, h, FACE_RECTANGLE_MULTIPLIER)
+			face = img[ny:ny+nh, nx:nx+nw]
+			if not (face.shape[0] == face.shape[1]):
+				face = img[y:y+h, x:x+w]
+			file_name, file_ext = os.path.splitext(filename)
+			face_filename = file_name + "_face%d" % face_number + file_ext
+			cv2.imwrite(join(path_to_results, face_filename), face)
+
+		if found_faces:
+			nr_detected += 1
+		else:
+			nr_not_detected += 1
+
+		debugger("%s: %d faces" % (filename, faces.size / 4 if found_faces else 0));
+
+	t2 = time()
+	debugger("\timages with faces: %d" % nr_detected)
+	debugger("\timages w/ou faces: %d" % nr_not_detected)
+	debugger("\ttime taken: %.2fs" % (t2-t1))
 
 """
 face_detect.py <piltide kataloog> <nägude kataloog> <näofaili suurus pikslites (ruudukujuline)>
 Nt face_detect.py /storage/fotis/pildid /storage/fotis/naod 32
 """
 if (len(sys.argv) > 2):
-    path_to_source = sys.argv[1]
-    path_to_results = sys.argv[2]
-    face_size = DEFAULT_FACE_SIZE
-    if len(sys.argv) > 3:
-    	face_size = int(sys.argv[3])
-    process_and_write_exhausting(path_to_source, path_to_results, face_size)
+	path_to_source = sys.argv[1]
+	path_to_results = sys.argv[2]
+	min_face_size = DEFAULT_MIN_FACE_SIZE
+	if len(sys.argv) > 3:
+		min_face_size = int(sys.argv[3])
+	process_and_write_exhausting(path_to_source, path_to_results, min_face_size)
 else:
-    raise KeyError('Not enough arguments')
+	raise KeyError('Not enough arguments')
