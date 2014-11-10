@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-import csv, sys, os, cPickle, math, random
+import csv, sys, os, cPickle, math, random, shutil
 from os.path import join
 import cv2, numpy
 import utils
@@ -60,21 +60,11 @@ def process_line(line):
 	return filename, person_name, comment
 
 
-def restore_and_show_random(batch, nr_images):
-	import random
-	for i in range(nr_images):
-		show_image(restore_image(random.choice(batch["data"])))
-
-
-# db1 = unpickle(join("cifar-10-python", "data_batch_1"))
-# meta = unpickle(join("cifar-10-python", "batches.meta"))
-# restore_and_show_random(db1, 10)
-
-"""
-Assumes that root is folder that has a number of folders in it. Those folders have
-files in them
-"""
 def folder_tree_to_dictionary(path_to_folder):
+	"""
+	Assumes that root is folder that has a number of folders in it. Those folders have
+	files in them
+	"""
 	folder_tree_dictionary = {}
 	folders_list = os.listdir(path_to_folder)
 	for folder in folders_list:
@@ -82,9 +72,23 @@ def folder_tree_to_dictionary(path_to_folder):
 	return folder_tree_dictionary
 
 
+def increase_folder_contents(path_to_folder, needed_nr):
+	"""
+	Increases the number of files in a folder by randomly copying them
+	"""
+	content_list = os.listdir(path_to_folder)
+	for i in range(len(content_list), needed_nr):
+		a_filename = random.choice(content_list)
+		file_name, file_ext = os.path.splitext(a_filename)
+		copy_name = "%s%d%s" % (file_name, i, file_ext)
+		shutil.copy2(join(path_to_folder, a_filename),
+					 join(path_to_folder, copy_name))
+	return
+
+
 def level_list(alist, desired_length):
 	"""
-	Crops the linst into asked size by randomly elimination elements
+	Crops the list into asked size by randomly eliminating elements
 	"""
 	while len(alist) > desired_length:
 		alist.pop(random.randint(0, desired_length-1))
@@ -108,13 +112,16 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 			"num_vis": image_size * image_size * 3}  # being used below
 	folder_tree_dictionary = folder_tree_to_dictionary(path_to_structured_folder_tree)
 	person_indexes = {}
-	# 1. delete all folders that have less images than required
+	# 1. randomly copy images until the folder has the needed number of images
 	# 2. remove randomly surplus images from folders than have more images than needed
 	for folder in folder_tree_dictionary.keys():
 		if len(folder_tree_dictionary[folder]) < nr_of_images:
-			del folder_tree_dictionary[folder]
-			continue
-		level_list(folder_tree_dictionary[folder], nr_of_images)
+			# del folder_tree_dictionary[folder]
+			# continue
+			path_to_subfolder = join(path_to_structured_folder_tree, folder)
+			increase_folder_contents(path_to_subfolder, nr_of_images)
+		elif len(folder_tree_dictionary[folder]) > nr_of_images:
+			level_list(folder_tree_dictionary[folder], nr_of_images)
 		# create dictionary of person names and their respective index in meta
 		meta["label_names"].append(folder)
 		person_indexes[folder] = len(meta["label_names"]) - 1
