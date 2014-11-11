@@ -1,24 +1,34 @@
 # -*- coding: utf8 -*-
-import csv, sys, os, cPickle, math, random, shutil
+import csv, sys, os, cPickle, math, random, shutil, unicodedata
 from os.path import join
 import cv2, numpy
 import utils
 
 DEFAULT_FACE_SIZE = 32
 
-def prepare_image(image):
-	green_start = image.size / 3  # 1/3 of batched_image size
-	blue_start = green_start * 2  # 2/3 of batched_image size
-	# red_start = 0
-	prepared_image = numpy.zeros((image.size), dtype="uint8")
-	bgr_index = 0
-	for i in range(image.shape[0]):
-		for j in range(image.shape[1]):
-			prepared_image[bgr_index + blue_start] = image[i, j, 0]
-			prepared_image[bgr_index + green_start] = image[i, j, 1]
-			prepared_image[bgr_index] = image[i, j, 2]
-			bgr_index+=1
-	return prepared_image
+def prepare_image(image, grayscale=False):
+	if grayscale:
+		gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+		prepared_image = numpy.zeros((gray.size), dtype="uint8")
+		bgr_index = 0
+		for i in range(gray.shape[0]):
+			for j in range(gray.shape[1]):
+				prepared_image[bgr_index] = gray[i, j]
+				bgr_index+=1
+		return prepared_image
+	else:
+		green_start = image.size / 3  # 1/3 of batched_image size
+		blue_start = green_start * 2  # 2/3 of batched_image size
+		# red_start = 0
+		prepared_image = numpy.zeros((image.size), dtype="uint8")
+		bgr_index = 0
+		for i in range(image.shape[0]):
+			for j in range(image.shape[1]):
+				prepared_image[bgr_index + blue_start] = image[i, j, 0]
+				prepared_image[bgr_index + green_start] = image[i, j, 1]
+				prepared_image[bgr_index] = image[i, j, 2]
+				bgr_index+=1
+		return prepared_image
 
 def restore_image(batched_image):
 	green_start = batched_image.size / 3  # 1/3 of batched_image size
@@ -105,11 +115,13 @@ meta dictionary keys:
 	label_names <type 'list'> - list of person names
 	num_vis <type 'int'> - image.size
 """
-def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, nr_of_images, image_size = DEFAULT_FACE_SIZE):
+def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, nr_of_images, image_size=DEFAULT_FACE_SIZE, use_grayscale=False):
 	utils.mkdir(path_to_results)
 	meta = {"label_names": [],
 			"num_cases_per_batch": num_cases_per_batch,
-			"num_vis": image_size * image_size * 3}  # being used below
+			"num_vis": image_size * image_size}  # being used below
+	if not use_grayscale:
+		meta["num_vis"] *= 3
 	folder_tree_dictionary = folder_tree_to_dictionary(path_to_structured_folder_tree)
 	person_indexes = {}
 	# 1. randomly copy images until the folder has the needed number of images
@@ -123,7 +135,8 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 		elif len(folder_tree_dictionary[folder]) > nr_of_images:
 			level_list(folder_tree_dictionary[folder], nr_of_images)
 		# create dictionary of person names and their respective index in meta
-		meta["label_names"].append(folder)
+		converted_folder_name =  unicodedata.normalize('NFKD', folder.decode("latin-1")).encode('ascii','ignore')
+		meta["label_names"].append(converted_folder_name)
 		person_indexes[folder] = len(meta["label_names"]) - 1
 
 	total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
@@ -148,7 +161,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 		# load and prepare the face
 		face = cv2.imread(join(path_to_structured_folder_tree, random_folder, random_filename))
 		face = cv2.resize(face, (image_size, image_size))
-		transformed_face = prepare_image(face)
+		transformed_face = prepare_image(face, use_grayscale)
 		# fill the data in current batch
 		batch["data"][:, batch_data_index] = transformed_face
 		batch["labels"].append(person_indexes[random_folder])
@@ -190,7 +203,10 @@ if (len(sys.argv) > 4):
 	face_size = DEFAULT_FACE_SIZE
 	if (len(sys.argv) > 5):
 		face_size = int(sys.argv[5])
-	create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, nr_of_images, face_size)
+	use_gray = False
+	if (len(sys.argv) > 6) and (sys.argv[6].lower() == "true"):
+		use_gray = True
+	create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, nr_of_images, face_size, use_gray)
 else:
 	raise KeyError('Not enough arguments')
 
