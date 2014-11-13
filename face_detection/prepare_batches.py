@@ -109,7 +109,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 	# 1. randomly copy images until the folder has the needed number of images
 	# 2. remove randomly surplus images from folders than have more images than needed
 	for folder in folder_tree_dictionary.keys():
-		level_list(folder_tree_dictionary[folder], nr_of_images)
+		#level_list(folder_tree_dictionary[folder], nr_of_images)
 		# create dictionary of person names and their respective index in meta
 		converted_folder_name =  unicodedata.normalize('NFKD', folder.decode("latin-1")).encode('ascii','ignore')
 		meta["label_names"].append(converted_folder_name)
