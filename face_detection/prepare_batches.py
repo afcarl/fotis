@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-import csv, sys, os, cPickle, math, random, shutil, unicodedata
+import csv, sys, os, cPickle, math, random, unicodedata
 from os.path import join
 import cv2, numpy
 import utils
@@ -62,14 +62,6 @@ def unpickle(path_to_file):
 	return data_dict
 
 
-def process_line(line):
-	line_list = line.split(";")
-	filename = line_list.pop(0)
-	person_name = line_list.pop(0)
-	comment = ";".join(line_list)
-	return filename, person_name, comment
-
-
 def folder_tree_to_dictionary(path_to_folder):
 	"""
 	Assumes that root is folder that has a number of folders in it. Those folders have
@@ -82,26 +74,16 @@ def folder_tree_to_dictionary(path_to_folder):
 	return folder_tree_dictionary
 
 
-def increase_folder_contents(path_to_folder, needed_nr):
-	"""
-	Increases the number of files in a folder by randomly copying them
-	"""
-	content_list = os.listdir(path_to_folder)
-	for i in range(len(content_list), needed_nr):
-		a_filename = random.choice(content_list)
-		file_name, file_ext = os.path.splitext(a_filename)
-		copy_name = "%s%d%s" % (file_name, i, file_ext)
-		shutil.copy2(join(path_to_folder, a_filename),
-					 join(path_to_folder, copy_name))
-	return
-
-
 def level_list(alist, desired_length):
 	"""
-	Crops the list into asked size by randomly eliminating elements
+	Levels list to desired length.
 	"""
+	# remove random elements if longer
 	while len(alist) > desired_length:
-		alist.pop(random.randint(0, desired_length-1))
+		alist.pop(random.randrange(len(alist)))
+	# duplicate random elements if shorter
+	while len(alist) < desired_length:
+		alist.append(random.choice(alist))
 
 """
 batch dictionary keys:
@@ -127,13 +109,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 	# 1. randomly copy images until the folder has the needed number of images
 	# 2. remove randomly surplus images from folders than have more images than needed
 	for folder in folder_tree_dictionary.keys():
-		if len(folder_tree_dictionary[folder]) < nr_of_images:
-			# del folder_tree_dictionary[folder]
-			# continue
-			path_to_subfolder = join(path_to_structured_folder_tree, folder)
-			increase_folder_contents(path_to_subfolder, nr_of_images)
-		elif len(folder_tree_dictionary[folder]) > nr_of_images:
-			level_list(folder_tree_dictionary[folder], nr_of_images)
+		level_list(folder_tree_dictionary[folder], nr_of_images)
 		# create dictionary of person names and their respective index in meta
 		converted_folder_name =  unicodedata.normalize('NFKD', folder.decode("latin-1")).encode('ascii','ignore')
 		meta["label_names"].append(converted_folder_name)
@@ -154,7 +130,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 	while folder_tree_dictionary:
 		# 1. take out random filename from dictionary
 		random_folder = random.choice(folder_tree_dictionary.keys())
-		random_filename = folder_tree_dictionary[random_folder].pop(random.randint(0, len(folder_tree_dictionary[random_folder])-1))
+		random_filename = folder_tree_dictionary[random_folder].pop(random.randrange(len(folder_tree_dictionary[random_folder])))
 		# if folder has been popped empty, remove the folder
 		if not folder_tree_dictionary[random_folder]:
 			del folder_tree_dictionary[random_folder]
