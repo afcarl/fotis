@@ -89,12 +89,9 @@ def level_list(alist, desired_length):
 def normalize_string(string):
 	try:
 		normalized = unicodedata.normalize('NFKD', string.decode("utf-8")).encode('ascii','ignore')
-		print "OK"
-		return normalized
 	except UnicodeDecodeError:
 		normalized = unicodedata.normalize('NFKD', string.decode("latin-1")).encode('ascii','ignore')
-		print "ERROR"
-		return normalized
+	return normalized
 
 """
 batch dictionary keys:
