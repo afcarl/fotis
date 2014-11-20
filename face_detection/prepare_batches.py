@@ -82,6 +82,14 @@ def level_list(alist, desired_length):
 	while len(alist) > desired_length:
 		alist.pop(random.randrange(len(alist)))
 
+
+def normalize_string(string):
+	try:
+		normalized = unicodedata.normalize('NFKD', string.decode("utf-8")).encode('ascii','ignore')
+	except UnicodeDecodeError:
+		normalized = unicodedata.normalize('NFKD', string.decode("latin-1")).encode('ascii','ignore')
+	return normalized
+
 """
 batch dictionary keys:
 	data <type 'numpy.ndarray'> - transformed numpy images in numpy list
@@ -110,13 +118,13 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 		if (len(folder_tree_dictionary[folder]) >= min_images):
 			level_list(folder_tree_dictionary[folder], max_images)
 			# create dictionary of person names and their respective index in meta
-			converted_folder_name =  unicodedata.normalize('NFKD', folder.decode("latin-1")).encode('ascii','ignore')
-			meta["label_names"].append(converted_folder_name)
+			meta["label_names"].append(normalize_string(folder))
 			person_indexes[folder] = len(meta["label_names"]) - 1
 		else:
 			del folder_tree_dictionary[folder]			
 
 	total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
+	print "Total number of images: ", total_nr_of_images
 	if num_cases_per_batch <= total_nr_of_images:
 		real_batch_size = num_cases_per_batch
 	else:
@@ -147,6 +155,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 
 		# if the batch is full then dump this into file
 		if batch_data_index == real_batch_size:
+		        print "Writing batch nr %d with %d images" % (batch_number, batch_data_index)
 			data_means[:,batch_number] = numpy.mean(batch['data'], 1)
 			# dump batch
 			batch["batch_label"] = "data batch %d" % batch_number
