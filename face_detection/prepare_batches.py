@@ -81,9 +81,6 @@ def level_list(alist, desired_length):
 	# remove random elements if longer
 	while len(alist) > desired_length:
 		alist.pop(random.randrange(len(alist)))
-	# duplicate random elements if shorter
-	while len(alist) < desired_length:
-		alist.append(random.choice(alist))
 
 """
 batch dictionary keys:
@@ -97,11 +94,12 @@ meta dictionary keys:
 	label_names <type 'list'> - list of person names
 	num_vis <type 'int'> - image.size
 """
-def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, nr_of_images, image_size=DEFAULT_FACE_SIZE, use_grayscale=False):
+def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, min_images, max_images, image_size=DEFAULT_FACE_SIZE, use_grayscale=False):
 	utils.mkdir(path_to_results)
 	meta = {"label_names": [],
 			"num_cases_per_batch": num_cases_per_batch,
-			"num_vis": image_size * image_size}  # being used below
+			"img_size": image_size,
+			"num_vis": image_size * image_size }  # being used below
 	if not use_grayscale:
 		meta["num_vis"] *= 3
 	folder_tree_dictionary = folder_tree_to_dictionary(path_to_structured_folder_tree)
@@ -109,11 +107,14 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 	# 1. randomly copy images until the folder has the needed number of images
 	# 2. remove randomly surplus images from folders than have more images than needed
 	for folder in folder_tree_dictionary.keys():
-		level_list(folder_tree_dictionary[folder], nr_of_images)
-		# create dictionary of person names and their respective index in meta
-		converted_folder_name =  unicodedata.normalize('NFKD', folder.decode("latin-1")).encode('ascii','ignore')
-		meta["label_names"].append(converted_folder_name)
-		person_indexes[folder] = len(meta["label_names"]) - 1
+		if (len(folder_tree_dictionary[folder]) >= min_images):
+			level_list(folder_tree_dictionary[folder], max_images)
+			# create dictionary of person names and their respective index in meta
+			converted_folder_name =  unicodedata.normalize('NFKD', folder.decode("latin-1")).encode('ascii','ignore')
+			meta["label_names"].append(converted_folder_name)
+			person_indexes[folder] = len(meta["label_names"]) - 1
+		else:
+			del folder_tree_dictionary[folder]			
 
 	total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
 	if num_cases_per_batch <= total_nr_of_images:
@@ -175,14 +176,19 @@ if (len(sys.argv) > 4):
 	path_to_structured_folder_tree = sys.argv[1]
 	path_to_results = sys.argv[2]
 	num_cases_per_batch = int(sys.argv[3])
-	nr_of_images = int(sys.argv[4])
-	face_size = DEFAULT_FACE_SIZE
+	min_images = 0
+	if (len(sys.argv) > 4):
+		min_images = int(sys.argv[4])
+	max_images = 1000
 	if (len(sys.argv) > 5):
-		face_size = int(sys.argv[5])
+		max_images = int(sys.argv[5])
+	face_size = DEFAULT_FACE_SIZE
+	if (len(sys.argv) > 6):
+		face_size = int(sys.argv[6])
 	use_gray = False
-	if (len(sys.argv) > 6) and (sys.argv[6].lower() == "true"):
+	if (len(sys.argv) > 7) and (sys.argv[7].lower() == "true"):
 		use_gray = True
-	create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, nr_of_images, face_size, use_gray)
+	create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, min_images, max_images, face_size, use_gray)
 else:
 	raise KeyError('Not enough arguments')
 
