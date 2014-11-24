@@ -103,6 +103,7 @@ meta dictionary keys:
 	num_vis <type 'int'> - image.size
 """
 def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_per_batch, min_images, max_images, image_size=DEFAULT_FACE_SIZE, use_grayscale=False):
+	# PART 0 - preparations
 	utils.mkdir(path_to_results)
 	meta = {"label_names": [],
 			"num_cases_per_batch": num_cases_per_batch,
@@ -112,8 +113,10 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 		meta["num_vis"] *= 3
 	folder_tree_dictionary = folder_tree_to_dictionary(path_to_structured_folder_tree)
 	person_indexes = {}
+
+	# PART 1 - prepare the input data
 	# 1. randomly copy images until the folder has the needed number of images
-	# 2. remove randomly surplus images from folders than have more images than needed
+	# 2. remove randomly surplus images from folders that have more images than needed
 	for folder in folder_tree_dictionary.keys():
 		if (len(folder_tree_dictionary[folder]) >= min_images):
 			level_list(folder_tree_dictionary[folder], max_images)
@@ -121,21 +124,24 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 			meta["label_names"].append(normalize_string(folder))
 			person_indexes[folder] = len(meta["label_names"]) - 1
 		else:
-			del folder_tree_dictionary[folder]			
+			del folder_tree_dictionary[folder]
 
+	# PART 2 - divide the input data
 	total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
 	print "Total number of images: ", total_nr_of_images
 	if num_cases_per_batch <= total_nr_of_images:
 		real_batch_size = num_cases_per_batch
 	else:
 		real_batch_size = total_nr_of_images
+	batches_lists = []
+	# multiplication trick does not work here
+	for i in range(int(math.ceil(total_nr_of_images / float(num_cases_per_batch)))):
+		batches_lists.append([])
+	nr_of_batches = len(batches_lists)
+	last_batch_len = total_nr_of_images % real_batch_size
+
 	data_means = numpy.zeros((meta["num_vis"], math.ceil(total_nr_of_images / float(num_cases_per_batch))))
-	batch = {"data": numpy.empty((meta["num_vis"], real_batch_size),  dtype="uint8"),
-			 "labels": [],
-			 "batch_label": "",
-			 "filenames": []}
-	batch_data_index = 0
-	batch_number = 0
+	i_batch = 0
 	while folder_tree_dictionary:
 		# 1. take out random filename from dictionary
 		random_folder = random.choice(folder_tree_dictionary.keys())
@@ -143,38 +149,52 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 		# if folder has been popped empty, remove the folder
 		if not folder_tree_dictionary[random_folder]:
 			del folder_tree_dictionary[random_folder]
-		# load and prepare the face
-		face = cv2.imread(join(path_to_structured_folder_tree, random_folder, random_filename))
-		face = cv2.resize(face, (image_size, image_size))
-		transformed_face = prepare_image(face, use_grayscale)
-		# fill the data in current batch
-		batch["data"][:, batch_data_index] = transformed_face
-		batch["labels"].append(person_indexes[random_folder])
-		batch["filenames"].append(random_filename)
-		batch_data_index += 1
 
-		# if the batch is full then dump this into file
-		if batch_data_index == real_batch_size:
-		        print "Writing batch nr %d with %d images" % (batch_number, batch_data_index)
-			data_means[:,batch_number] = numpy.mean(batch['data'], 1)
-			# dump batch
-			batch["batch_label"] = "data batch %d" % batch_number
-			batch_number += 1
-			pickle(batch, join(path_to_results, batch["batch_label"].replace(" ", "_")))
-
-			# reset the depending variables
-			total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
-			if num_cases_per_batch <= total_nr_of_images:
-				real_batch_size = num_cases_per_batch
+		# 2. divide randomly selected images's filenames into to be batches
+		data = [join(path_to_structured_folder_tree, random_folder, random_filename), person_indexes[random_folder]]
+		if (i_batch >= (nr_of_batches - 1)):
+			if (len(batches_lists[i_batch]) < last_batch_len):
+				batches_lists[i_batch].append(data)
+				i_batch = 0
 			else:
-				real_batch_size = total_nr_of_images
-			batch = {"data": numpy.empty((meta["num_vis"], real_batch_size),  dtype="uint8"),
-					 "labels": [],
-					 "batch_label": "",
-					 "filenames": []}
-			batch_data_index = 0
-	# dump metadata
-	meta['data_mean'] = numpy.mean(data_means,1)
+				batches_lists[0].append(data)
+				i_batch = 1
+		else:
+			batches_lists[i_batch].append(data)
+			i_batch += 1
+
+	# PART 3 - create batches
+	for i in range(len(batches_lists)):
+		#  part 3.1 - prepare variables
+		if i == (nr_of_batches - 1):
+			real_batch_size = last_batch_len
+		batch = {"data": numpy.empty((meta["num_vis"], real_batch_size),  dtype="uint8"),
+				 "labels": [],
+				 "batch_label": "",
+				 "filenames": []}
+		batch_data_index = 0
+
+		# part 3.2 - load images to batch
+		for filename_label_id in batches_lists[i]:
+			# load and prepare the face
+			face = cv2.imread(filename_label_id[0])
+			face = cv2.resize(face, (image_size, image_size))
+			transformed_face = prepare_image(face, use_grayscale)
+
+			# fill the data in current batch
+			batch["data"][:, batch_data_index] = transformed_face
+			batch["labels"].append(filename_label_id[1])
+			batch["filenames"].append(os.path.basename(filename_label_id[0]))
+			batch_data_index += 1
+
+		# part 3.3 - dump current batch into file
+		print "Writing batch nr %d with %d images" % (i, batch_data_index)
+		data_means[:, i] = numpy.mean(batch['data'], 1)
+		batch["batch_label"] = "data batch %d of %d" % (i, nr_of_batches)
+		pickle(batch, join(path_to_results, "data batch %d" % i))
+
+	# PART 4 - dump metadata
+	meta['data_mean'] = numpy.mean(data_means, 1)
 	pickle(meta, join(path_to_results, "batches.meta"))
 
 
