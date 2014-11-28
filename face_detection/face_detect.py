@@ -22,9 +22,9 @@ FACE_CASCADE_CLASSIFIER = join('cascades', FACE_CASCADE_CLASSIFIERS["default"])
 # the number used to multiply the box surrounding the face
 FACE_RECTANGLE_MULTIPLIER = 1.4
 # the size the face images are resized into
-DEFAULT_MIN_FACE_SIZE = 28
+DEFAULT_MIN_FACE_SIZE = 32
 
-SCALE_FACTOR = 1.05
+SCALE_FACTOR = 1
 MIN_NEIGHBORS = 5
 # Flags:
 # CV_HAAR_DO_CANNY_PRUNING

@@ -113,6 +113,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
         meta["num_vis"] *= 3
 
     # PART 1 - scan directories
+    print "Scanning directories..."
     folder_tree_dictionary = folder_tree_to_dictionary(path_to_structured_folder_tree)
     person_indexes = {}
     for folder in folder_tree_dictionary.keys():
@@ -127,8 +128,8 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
     total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
     print "Total number of images: ", total_nr_of_images
 
-    print "Loading images..."
     # PART 2 - load images
+    print "Loading images..."
     data = numpy.empty((meta["num_vis"], total_nr_of_images),  dtype="uint8")
     data_index = 0
     labels = []
@@ -145,6 +146,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
             data_index += 1
 
     # PART 3 - dump metadata
+    print "Writing batches.meta"
     # calculate mean of the images
     meta['data_mean'] = numpy.mean(data, 1)
     pickle(meta, join(path_to_results, "batches.meta"))
@@ -156,15 +158,14 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
     for i in range(nr_of_batches):
         batch_start = i * num_cases_per_batch
         batch_end = min((i + 1) * num_cases_per_batch, total_nr_of_images)
-        print batch_start, batch_end
         batch_range = random_indexes[batch_start:batch_end]
         batch = {"data": data[:, batch_range],
                  "labels": [labels[j] for j in batch_range],
                  "filenames": [filenames[j] for j in batch_range],
-                 "batch_label": "data batch %d of %d" % (i + 1, nr_of_batches)}
+                 "batch_label": "data batch %d of %d" % (i, nr_of_batches)}
 
-        print "Writing batch nr %d with %d images" % (i + 1, batch_end - batch_start)
-        pickle(batch, join(path_to_results, "data_batch_%d" % (i + 1)))
+        print "Writing batch nr %d with %d images" % (i, batch_end - batch_start)
+        pickle(batch, join(path_to_results, "data_batch_%d" % i))
 
 """
 prepare_batches.py <folder with people-named-folders> <min nr of images>
