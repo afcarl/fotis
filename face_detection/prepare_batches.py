@@ -127,6 +127,7 @@ def create_batches(path_to_structured_folder_tree, path_to_results, num_cases_pe
 
     total_nr_of_images = sum([len(folder_tree_dictionary[folder]) for folder in folder_tree_dictionary])
     print "Total number of images: ", total_nr_of_images
+    print "Number of classes: ", len(meta["label_names"])
 
     # PART 2 - load images
     print "Loading images..."

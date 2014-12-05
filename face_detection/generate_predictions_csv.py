@@ -6,7 +6,7 @@ from utils import mkdir
 # ###################################
 #          START CONSTANTS
 # ###################################
-DEFAULT_THRESHOLD = 0.88
+DEFAULT_THRESHOLD = 0.99
 
 # #################################
 # 	    END CONSTANTS
@@ -35,11 +35,11 @@ def generate_predictions_csv(path_to_batch, path_to_predictions, path_to_meta, p
     csv_file = open(path_to_csv, 'wb')
     try:
         writer = csv.writer(csv_file,  delimiter=';',)
-        writer.writerow( ('Filename', 'Person', 'Percentage') )
+        writer.writerow( ('Filename', 'Person', 'Percentage', 'Correct') )
         for i in range(len(results[0])):
-            if not results[0][i] or percentages[i] < threshold:
+            if percentages[i] < threshold:
                 continue
-            writer.writerow( (batch["filenames"][i], meta["label_names"][preds[i]], "%.2f" % (percentages[i] * 100)) )
+            writer.writerow( (batch["filenames"][i], meta["label_names"][preds[i]], "%.2f" % (percentages[i] * 100), results[0][i]) )
     finally:
         csv_file.close()
 

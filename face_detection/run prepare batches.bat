@@ -1,3 +1,3 @@
 @echo off
-python prepare_batches.py ..\isikud_reviewed ..\isikud_batches 200 1 1000 64 True
+python prepare_batches.py ..\isikud_koik_reviewed ..\isikud_koik_batches 200 20 52 64 True
 pause
